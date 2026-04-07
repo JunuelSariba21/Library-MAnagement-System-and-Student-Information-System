@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SIS Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+
+<div class="sidebar">
+  <h2>SIS</h2>
+  <a onclick="show('students')">👨‍🎓 Students</a>
+  <a href="/logout">🚪 Logout</a>
+</div>
+
+<div class="main">
+
+<h1>Student</h1>
+
+<!-- STATS -->
+<div class="cards">
+  <div class="card green">
+    <h3>Total Students</h3>
+    <p id="total">0</p>
+  </div>
+  
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <input id="search" placeholder="Search..." onkeyup="searchStudent()">
+  <button onclick="loadStudents()">Refresh</button>
+</div>
+
+<!-- ADD STUDENT -->
+<div class="add-box">
+  <input id="id" placeholder="Student ID">
+  <input id="name" placeholder="Name">
+  <input id="course" placeholder="Course">
+  <select id="status">
+    <option value="Enrolled">Active</option>
+    <option value="Terminated">Terminated</option>
+  </select>
+  <button onclick="addStudent()">+ Add Student</button>
+</div>
+
+<!-- TABLE -->
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Course</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody id="table"></tbody>
+</table>
+<!-- EDIT MODAL -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <h3>Edit Student</h3>
+
+    <input id="edit_id" placeholder="Student ID" disabled>
+    <input id="edit_name" placeholder="Name">
+    <input id="edit_course" placeholder="Course">
+    <select id="edit_status">
+      <option value="Enrolled">Active</option>
+      <option value="Terminated">Terminated</option>
+    </select>
+
+    <button onclick="updateStudent()">Update</button>
+    <button onclick="closeModal()" class="cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <h3>Confirm Delete</h3>
+    <p>Are you sure you want to delete this student?</p>
+
+    <button onclick="deleteStudentConfirmed()" class="delete-btn">Delete</button>
+    <button onclick="closeDeleteModal()" class="cancel">Cancel</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+const API = "http://localhost:4000";
+
+let studentsData = [];
+
+function loadStudents(){
+ fetch(API+"/api/students")
+ .then(r=>r.json())
+ .then(data=>{
+  studentsData = data;
+  document.getElementById("total").innerText = data.length;
+  renderTable(data);
+ });
+}
+
+function renderTable(data){
+ let out="";
+ data.forEach(s=>{
+  out+=`
+  <tr>
+    <td>${s.student_id}</td>
+    <td>${s.name}</td>
+    <td>${s.course}</td>
+    <td>
+      <span class="${s.status == 'Enrolled' ? 'badge green' : 'badge red'}">
+        ${s.status == 'Enrolled' ? 'Active' : 'Terminated'}
+      </span>
+    </td>
+    <td class="actions">
+      <i class="fa-solid fa-pen edit" onclick="openModal('${s.student_id}','${s.name}','${s.course}','${s.status}')"></i>
+      <i class="fa-solid fa-trash delete" onclick="confirmDelete('${s.student_id}')"></i>
+    </td>
+  </tr>`;
+ });
+ document.getElementById("table").innerHTML = out;
+}
+
+function editStudent(id,name,course,status){
+  document.getElementById("id").value = id;
+  document.getElementById("name").value = name;
+  document.getElementById("course").value = course;
+  document.getElementById("status").value = status;
+
+  window.editMode = id;
+}
+let deleteId = null;
+
+// OPEN DELETE MODAL
+function confirmDelete(id){
+  deleteId = id;
+  document.getElementById("deleteModal").style.display = "flex";
+}
+
+// CLOSE DELETE MODAL
+function closeDeleteModal(){
+  document.getElementById("deleteModal").style.display = "none";
+}
+
+// CONFIRM DELETE
+function deleteStudentConfirmed(){
+  fetch(API+"/api/students/"+deleteId,{
+    method:"DELETE"
+  }).then(()=>{
+    closeDeleteModal();
+    loadStudents();
+  });
+}
+
+function addStudent() {
+  const studentId = document.getElementById("id").value;
+  const studentName = document.getElementById("name").value;
+  const course = document.getElementById("course").value;
+  const status = document.getElementById("status").value;
+
+  fetch(API + "/api/students", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      student_id: studentId,
+      name: studentName,
+      course: course,
+      status: status
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    alert(data.message);
+    loadStudents();
+
+    document.getElementById("id").value = "";
+    document.getElementById("name").value = "";
+    document.getElementById("course").value = "";
+    document.getElementById("status").value = "Enrolled";
+  });
+}
+// OPEN MODAL
+function openModal(id,name,course,status){
+  document.getElementById("modal").style.display = "flex";
+
+  edit_id.value = id;
+  edit_name.value = name;
+  edit_course.value = course;
+  edit_status.value = status;
+}
+
+// CLOSE MODAL
+function closeModal(){
+  document.getElementById("modal").style.display = "none";
+}
+
+// UPDATE STUDENT (PUT)
+function updateStudent(){
+  fetch(API+"/api/students/"+edit_id.value,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      name: edit_name.value,
+      course: edit_course.value,
+      status: edit_status.value
+    })
+  }).then(()=>{
+    closeModal();
+    loadStudents();
+  });
+}
+
+loadStudents();
+</script>
+
+</body>
+</html>

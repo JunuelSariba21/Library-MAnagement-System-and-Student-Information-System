@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LMS Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+
+<div class="sidebar">
+  <h2>📚 LMS</h2>
+  <a onclick="showPage('dashboard')"><i class="fa fa-home"></i> Dashboard</a>
+  <a onclick="showPage('books')"><i class="fa fa-book"></i> Books</a>
+  <a onclick="showPage('borrow')"><i class="fa fa-box"></i> Borrow</a>
+  <a onclick="showPage('return')"><i class="fa fa-undo"></i> Return</a>
+  <a href="/logout"><i class="fa fa-sign-out"></i> Logout</a>
+</div>
+
+<div class="main">
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="page">
+  <h1>Dashboard</h1>
+  <div class="cards">
+    <div class="card blue">
+      <h3>Total Books</h3>
+      <p id="totalBooks">0</p>
+    </div>
+    <div class="card green">
+      <h3>Available</h3>
+      <p id="availableCount">0</p>
+    </div>
+    <div class="card orange">
+      <h3>Borrowed</h3>
+      <p id="borrowedCount">0</p>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKS -->
+<div id="books" class="page" style="display:none;">
+  <h1>Books</h1>
+
+  <input id="searchBook" placeholder="Search..." onkeyup="searchBook()">
+
+  <div class="add-box">
+    <input id="id" placeholder="Book ID">
+    <input id="title" placeholder="Title">
+    <input id="author" placeholder="Author">
+    <button onclick="addBook()">+ Add</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Title</th><th>Author</th><th>Status</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="bookTable"></tbody>
+  </table>
+</div>
+
+<!-- BORROW -->
+<div id="borrow" class="page" style="display:none;">
+  <h1>Borrow</h1>
+
+  <div class="add-box">
+    <input id="sid" placeholder="Student ID">
+    <input id="bkid" placeholder="Book ID">
+    <input id="bdate" placeholder="Borrow Date">
+    <input id="ddate" placeholder="Due Date">
+    <button onclick="borrowBook()">Borrow</button>
+  </div>
+
+  <input id="searchBorrow" placeholder="Search..." onkeyup="searchBorrow()">
+
+  <table>
+    <thead>
+      <tr>
+        <th>Student</th><th>Book</th><th>Status</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="borrowTable"></tbody>
+  </table>
+</div>
+
+<!-- RETURN -->
+<div id="return" class="page" style="display:none;">
+  <h1>Return Books</h1>
+
+  <input id="searchReturn" placeholder="Search..." onkeyup="searchReturn()">
+
+  <table>
+    <thead>
+      <tr>
+        <th>Student</th><th>Book</th><th>Status</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="returnTable"></tbody>
+  </table>
+</div>
+
+<!-- EDIT MODAL -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <h3>Edit Book</h3>
+    <input id="edit_id" disabled>
+    <input id="edit_title">
+    <input id="edit_author">
+    <select id="edit_available">
+      <option value="1">Available</option>
+      <option value="0">Borrowed</option>
+    </select>
+    <button onclick="updateBook()">Update</button>
+    <button onclick="closeModal()" class="cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <h3>Delete Book?</h3>
+    <button onclick="deleteBookConfirmed()" class="delete-btn">Delete</button>
+    <button onclick="closeDeleteModal()" class="cancel">Cancel</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+const API="http://localhost:3000";
+
+let booksData=[], borrowData=[], deleteId=null;
+
+/* NAVIGATION */
+function showPage(p){
+ document.querySelectorAll(".page").forEach(x=>x.style.display="none");
+ document.getElementById(p).style.display="block";
+}
+
+/* BOOKS */
+function loadBooks(){
+ fetch(API+"/api/books").then(r=>r.json()).then(data=>{
+  booksData=data;
+
+  let total=data.length;
+  let available=data.filter(b=>b.available).length;
+
+  totalBooks.innerText=total;
+  availableCount.innerText=available;
+  borrowedCount.innerText=total-available;
+
+  renderBooks(data);
+ });
+}
+
+function renderBooks(data){
+ let out="";
+ data.forEach(b=>{
+  out+=`
+  <tr>
+    <td>${b.id}</td>
+    <td>${b.title}</td>
+    <td>${b.author}</td>
+    <td><span class="${b.available?'badge green':'badge red'}">${b.available?'Available':'Borrowed'}</span></td>
+    <td class="actions">
+      <i class="fa fa-pen edit" onclick="openModal('${b.id}','${b.title}','${b.author}',${b.available})"></i>
+      <i class="fa fa-trash delete" onclick="confirmDelete('${b.id}')"></i>
+    </td>
+  </tr>`;
+ });
+ bookTable.innerHTML=out;
+}
+
+function searchBook(){
+ let v=searchBook.value.toLowerCase();
+ renderBooks(booksData.filter(b=>b.title.toLowerCase().includes(v)));
+}
+
+function addBook(){
+ fetch(API+"/api/books",{method:"POST",headers:{"Content-Type":"application/json"},
+ body:JSON.stringify({id:id.value,title:title.value,author:author.value})
+ }).then(loadBooks);
+}
+
+/* BORROW */
+function loadBorrow(){
+ fetch(API+"/api/borrow").then(r=>r.json()).then(data=>{
+  borrowData=data;
+  renderBorrow(data);
+  loadReturn();
+ });
+}
+
+function renderBorrow(data){
+ let out="";
+ data.forEach(b=>{
+  out+=`
+  <tr>
+    <td>${b.student_id}</td>
+    <td>${b.book_id}</td>
+    <td><span class="${b.status=='Borrowed'?'badge red':'badge green'}">${b.status}</span></td>
+    <td>${b.status=='Borrowed'?`<button onclick="returnBook(${b.id})">Return</button>`:''}</td>
+  </tr>`;
+ });
+ borrowTable.innerHTML=out;
+}
+
+function borrowBook(){
+ fetch(API+"/api/borrow",{method:"POST",headers:{"Content-Type":"application/json"},
+ body:JSON.stringify({student_id:sid.value,book_id:bkid.value,borrow_date:bdate.value,due_date:ddate.value})
+ }).then(()=>{loadBorrow();loadBooks();});
+}
+
+function searchBorrow(){
+ let v=searchBorrow.value.toLowerCase();
+ renderBorrow(borrowData.filter(b=>b.student_id.toLowerCase().includes(v)));
+}
+
+/* RETURN */
+function loadReturn(){
+ let borrowed=borrowData.filter(b=>b.status==="Borrowed");
+ renderReturn(borrowed);
+}
+
+function renderReturn(data){
+ let out="";
+ data.forEach(b=>{
+  out+=`
+  <tr>
+    <td>${b.student_id}</td>
+    <td>${b.book_id}</td>
+    <td><span class="badge red">Borrowed</span></td>
+    <td><button onclick="returnBook(${b.id})">Return</button></td>
+  </tr>`;
+ });
+ returnTable.innerHTML=out;
+}
+
+function searchReturn(){
+ let v=searchReturn.value.toLowerCase();
+ renderReturn(borrowData.filter(b=>b.status==="Borrowed" && b.student_id.includes(v)));
+}
+
+function returnBook(id){
+ fetch(API+"/api/borrow/"+id,{method:"PATCH"})
+ .then(()=>{loadBorrow();loadBooks();});
+}
+
+/* MODAL */
+function openModal(id,title,author,available){
+ modal.style.display="flex";
+ edit_id.value=id;
+ edit_title.value=title;
+ edit_author.value=author;
+ edit_available.value=available;
+}
+
+function closeModal(){modal.style.display="none";}
+
+function updateBook(){
+ fetch(API+"/api/books/"+edit_id.value,{
+  method:"PUT",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({title:edit_title.value,author:edit_author.value,available:edit_available.value})
+ }).then(()=>{closeModal();loadBooks();});
+}
+
+/* DELETE */
+function confirmDelete(id){
+ deleteId=id;
+ deleteModal.style.display="flex";
+}
+
+function closeDeleteModal(){deleteModal.style.display="none";}
+
+function deleteBookConfirmed(){
+ fetch(API+"/api/books/"+deleteId,{method:"DELETE"})
+ .then(()=>{closeDeleteModal();loadBooks();});
+}
+
+/* INIT */
+loadBooks();
+loadBorrow();
+</script>
+
+</body>
+</html>
